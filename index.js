@@ -1,136 +1,116 @@
-import express from 'express';
-import path from 'path';
+const express = require('express');
+const path = require('path');
+const crypto = require('crypto');
+const mysql = require('mysql2/promise');
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
-import mysql from 'mysql2/promise';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = 3000;
 
-// ======== Konfigurasi __dirname di ES Module =========
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-// ======== Middleware =========
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ======== Jalankan server dalam fungsi async agar bisa pakai await di luar =========
-async function startServer() {
-  try {
-    // ======== Koneksi ke MySQL =========
-    const db = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: 'REFINALDI9786', // sesuaikan dengan milikmu
-      database: 'apikey_db',
-      port: 3309
-    });
-
-    // Cek koneksi
-    const [info] = await db.query('SELECT DATABASE() AS db, @@port AS port');
-    console.log(`✅ Terkoneksi ke database: ${info[0].db} (port ${info[0].port})`);
-
-    // ======== Endpoint Tes Koneksi =========
-    app.get('/testdb', async (req, res) => {
-      try {
-        const [rows] = await db.query('SELECT NOW() AS waktu');
-        res.json({ success: true, waktu: rows[0].waktu });
-      } catch (error) {
-        console.error('❌ Error tes DB:', error);
-        res.status(500).json({ success: false, message: error.message });
-      }
-    });
-
-
-    
- // ======== Endpoint Membuat API Key =========
-app.post('/create', async (req, res) => {
-  console.log('📩 Endpoint /create dipanggil');
-
-  try {
-    const apiKey = 'API-' + crypto.randomBytes(16).toString('hex').toUpperCase();
-    console.log('🔑 API Key yang dibuat:', apiKey);
-
-    const [result] = await db.execute('INSERT INTO api_keys (key_value) VALUES (?)', [apiKey]);
-    console.log('🧾 Hasil eksekusi INSERT:', result);
-
-    if (result.affectedRows > 0) {
-      console.log('✅ Data tersimpan di database!');
-    } else {
-      console.log('⚠️ INSERT tidak menambah data apa pun!');
-    }
-
-    res.json({
-      success: true,
-      apiKey,
-      message: '✅ API Key berhasil dibuat dan disimpan di database'
-    });
-  } catch (error) {
-    console.error('❌ Error saat membuat API Key:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Gagal membuat API Key'
-    });
-  }
-});
-
-
-    // ======== Endpoint Mengecek API Key =========
-    app.post('/checkapi', async (req, res) => {
-      const { apiKey } = req.body;
-
-      if (!apiKey) {
-        return res.status(400).json({
-          success: false,
-          message: 'API Key tidak boleh kosong!'
-        });
-      }
-
-      try {
-        const [rows] = await db.execute('SELECT * FROM api_keys WHERE key_value = ?', [apiKey]);
-        console.log(`🔍 Mengecek API Key: ${apiKey} | Ditemukan: ${rows.length > 0}`);
-
-        if (rows.length > 0) {
-          res.json({
-            success: true,
-            message: '✅ API Key valid'
-          });
-        } else {
-          res.status(401).json({
-            success: false,
-            message: '❌ API Key tidak ditemukan / tidak valid'
-          });
-        }
-      } catch (error) {
-        console.error('❌ Error saat memeriksa API Key:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Terjadi kesalahan server'
-        });
-      }
-    });
-
-    app.get('/lihatdata', async (req, res) => {
-  const [rows] = await db.query('SELECT * FROM api_keys ORDER BY id DESC LIMIT 10');
-  res.json(rows);
-});
-
-
-    // ======== Route utama =========
-    app.get('/', (req, res) => {
-      res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    });
-
-    // ======== Jalankan server =========
-    app.listen(port, () => {
-      console.log(`🚀 Server berjalan di http://localhost:${port}`);
-    });
-  } catch (error) {
-    console.error('❌ Gagal terhubung ke database:', error.message);
-    process.exit(1); // hentikan server kalau DB gagal konek
-  }
+// Konfigurasi koneksi MySQL
+const dbConfig = {
+    host: 'localhost',
+    user: 'root',
+    password: 'REFINALDI9786', // ganti sesuai password kamu
+    database: 'apikey_db',
+    port: 3309
 }
 
-// Panggil fungsi utama
-startServer();
+// Middleware
+app.use(express.json())
+app.use(express.static(path.join(__dirname, 'public')))
+
+// Fungsi helper koneksi database
+async function getConnection() {
+    const connection = await mysql.createConnection(dbConfig)
+    return connection
+}
+
+// === ⿡ GET - Ambil semua API Key ===
+app.get('/apikeys', async (req, res) => {
+    try {
+        const connection = await getConnection()
+        const [rows] = await connection.execute('SELECT * FROM api_keys ORDER BY id DESC')
+        connection.end()
+        res.json({ success: true, data: rows })
+    } catch (error) {
+        console.error('❌ Gagal mengambil data:', error.message)
+        res.status(500).json({ success: false, message: 'Gagal mengambil data dari database' })
+    }
+})
+
+// === ⿢ POST - Buat API Key baru ===
+app.post('/apikeys', async (req, res) => {
+    try {
+        const apiKey = `sk-sm-v1-${crypto.randomBytes(16).toString('hex').toUpperCase()}`
+        const connection = await getConnection()
+        console.log("🔹 Koneksi berhasil, siap insert:", apiKey)
+
+        await connection.execute('INSERT INTO api_keys (api_key) VALUES (?)', [apiKey])
+        connection.end()
+
+        res.json({ success: true, message: 'API Key berhasil dibuat', apiKey })
+    } catch (error) {
+        console.error('❌ Gagal membuat API key:', error)
+        res.status(500).json({ success: false, message: 'Gagal membuat API key', error: error.message })
+    }
+})
+
+// === ⿣ PUT - Update API Key berdasarkan ID ===
+app.put('/apikeys/:id', async (req, res) => {
+    const { id } = req.params
+    const { api_key } = req.body
+
+    if (!api_key) {
+        return res.status(400).json({ success: false, message: 'api_key baru harus dikirim' })
+    }
+
+    try {
+        const connection = await getConnection()
+        const [result] = await connection.execute('UPDATE api_keys SET api_key = ? WHERE id = ?', [api_key, id])
+        connection.end()
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'API key tidak ditemukan' })
+        }
+
+        res.json({ success: true, message: 'API key berhasil diperbarui' })
+    } catch (error) {
+        console.error('❌ Gagal mengupdate API key:', error.message)
+        res.status(500).json({ success: false, message: 'Gagal mengupdate API key' })
+    }
+})
+
+// === ⿤ DELETE - Hapus API Key berdasarkan ID ===
+app.delete('/apikeys/:id', async (req, res) => {
+    const { id } = req.params
+
+    try {
+        const connection = await getConnection()
+        const [result] = await connection.execute('DELETE FROM api_keys WHERE id = ?', [id])
+        connection.end()
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'API key tidak ditemukan' })
+        }
+
+        res.json({ success: true, message: 'API key berhasil dihapus' })
+    } catch (error) {
+        console.error('❌ Gagal menghapus API key:', error.message)
+        res.status(500).json({ success: false, message: 'Gagal menghapus API key' })
+    }
+})
+
+// === Rute Halaman Utama ===
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
+
+// === Jalankan Server ===
+app.listen(port, () => {
+    console.log(`✅ Server berjalan di http://localhost:${port}`)
+})

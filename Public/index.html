@@ -11,8 +11,8 @@
       color: #4a4a4a;
       display: flex;
       justify-content: center;
-      align-items: center;
-      height: 100vh;
+      align-items: flex-start;
+      padding-top: 50px;
       margin: 0;
     }
     .container {
@@ -20,7 +20,7 @@
       border-radius: 20px;
       box-shadow: 0 4px 10px rgba(255, 0, 128, 0.2);
       padding: 30px;
-      width: 350px;
+      width: 400px;
       text-align: center;
       position: relative;
     }
@@ -83,6 +83,20 @@
     #notif.show {
       opacity: 1;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ff80ab;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #ff4081;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -93,22 +107,59 @@
     <button onclick="copyApiKey()">Copy</button>
     <textarea id="apikey" readonly placeholder="Klik di sini untuk menyalin API Key..."></textarea>
     <div id="notif">✅ API Key disalin!</div>
+
+    <h2>Daftar Semua API Key</h2>
+    <table id="table-apikeys">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>API Key</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <script>
+    async function fetchApiKeys() {
+      try {
+        const response = await fetch('/apikeys');
+        const data = await response.json();
+        const tbody = document.querySelector('#table-apikeys tbody');
+        tbody.innerHTML = '';
+
+        if (data.success && data.data.length > 0) {
+          data.data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${row.id}</td>
+              <td>${row.api_key}</td>
+              <td>${new Date(row.created_at).toLocaleString()}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
+      } catch (error) {
+        console.error('Gagal ambil daftar API Key:', error);
+      }
+    }
+
     async function buatApiKey() {
       const textArea = document.getElementById('apikey');
       textArea.value = 'Sedang membuat API Key...';
+
       try {
-        const response = await fetch('http://localhost:3000/create', { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' } 
+        const response = await fetch('/apikeys', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
         });
 
         if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
         const data = await response.json();
         textArea.value = data.apiKey || 'Tidak ada API Key dikembalikan!';
+        fetchApiKeys(); // refresh tabel setelah buat API key
       } catch (error) {
         textArea.value = '❌ Gagal membuat API Key!\n' + error.message;
         console.error('Error:', error);
@@ -130,8 +181,10 @@
       setTimeout(() => notif.classList.remove('show'), 2000);
     }
 
-    // 💡 Klik di dalam textarea otomatis copy
     document.getElementById('apikey').addEventListener('click', copyApiKey);
+
+    // load daftar API key saat halaman dibuka
+    fetchApiKeys();
   </script>
 </body>
 </html>
