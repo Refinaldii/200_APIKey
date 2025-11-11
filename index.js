@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import mysql from 'mysql2/promise'; // pakai versi promise
 
 const app = express();
 const port = 3000;
@@ -11,33 +12,43 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Middleware
-app.use(express.json()); // untuk parsing body JSON
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Simpan API Key contoh (sementara, tanpa database)
-let myApiKey = null;
-
-// Endpoint contoh
-app.get('/test', (req, res) => {
-  res.send('Hello World!');
+// 🔗 Koneksi ke database
+const db = await mysql.createConnection({
+  host: 'localhost',
+  user: 'root',         // ganti sesuai user MySQL kamu
+  password: '',         // ganti sesuai password MySQL kamu
+  database: 'apikey_db' // database yang kita buat di atas
 });
 
-// Endpoint POST untuk membuat API key
-app.post('/create', (req, res) => {
-  // Membuat API key acak dan aman secara kriptografis
-  const apiKey = 'API-' + crypto.randomBytes(16).toString('hex').toUpperCase();
+console.log('✅ Terhubung ke database MySQL');
 
-  // Simpan API key ke variabel global
-  myApiKey = apiKey;
+// 🧩 Endpoint POST untuk membuat API key
+app.post('/create', async (req, res) => {
+  try {
+    const apiKey = 'API-' + crypto.randomBytes(16).toString('hex').toUpperCase();
 
-  res.json({
-    success: true,
-    apiKey: apiKey
-  });
+    // Simpan API key ke database
+    await db.execute('INSERT INTO api_keys (key_value) VALUES (?)', [apiKey]);
+
+    res.json({
+      success: true,
+      apiKey: apiKey,
+      message: 'API Key berhasil dibuat dan disimpan di database'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal membuat API Key'
+    });
+  }
 });
 
-// ✅ Endpoint POST untuk memeriksa API key
-app.post('/checkapi', (req, res) => {
+// 🧩 Endpoint POST untuk memeriksa API key
+app.post('/checkapi', async (req, res) => {
   const { apiKey } = req.body;
 
   if (!apiKey) {
@@ -47,15 +58,25 @@ app.post('/checkapi', (req, res) => {
     });
   }
 
-  if (apiKey === myApiKey) {
-    res.json({
-      success: true,
-      message: 'API Key valid ✅'
-    });
-  } else {
-    res.status(401).json({
+  try {
+    const [rows] = await db.execute('SELECT * FROM api_keys WHERE key_value = ?', [apiKey]);
+
+    if (rows.length > 0) {
+      res.json({
+        success: true,
+        message: '✅ API Key valid'
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        message: '❌ API Key tidak ditemukan / tidak valid'
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
       success: false,
-      message: 'API Key tidak valid ❌'
+      message: 'Terjadi kesalahan server'
     });
   }
 });
@@ -67,5 +88,5 @@ app.get('/', (req, res) => {
 
 // Jalankan server
 app.listen(port, () => {
-  console.log(`✅ Server berjalan di http://localhost:${port}`);
+  console.log(`🚀 Server berjalan di http://localhost:${port}`);
 });
