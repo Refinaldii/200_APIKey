@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pembuat API Key</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #ffe6f0;
+      color: #4a4a4a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background-color: #fff0f6;
+      border-radius: 20px;
+      box-shadow: 0 4px 10px rgba(255, 0, 128, 0.2);
+      padding: 30px;
+      width: 350px;
+      text-align: center;
+      position: relative;
+    }
+    h1 {
+      color: #ff4081;
+      margin-bottom: 20px;
+    }
+    h2 {
+      color: #d81b60;
+      font-size: 18px;
+      margin-top: -10px;
+      margin-bottom: 25px;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+    button {
+      background-color: #ff4081;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin: 5px;
+    }
+    button:hover {
+      background-color: #ff6699;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      margin-top: 20px;
+      border: 2px solid #ff80ab;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 14px;
+      resize: none;
+      background-color: #fff;
+      color: #333;
+      cursor: pointer;
+      transition: border-color 0.3s ease;
+    }
+    textarea:hover {
+      border-color: #ff4081;
+    }
+    #notif {
+      position: absolute;
+      bottom: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #ff80ab;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+    #notif.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>CV SULIT MOVE ON</h2>
+    <h1>Buat API Key</h1>
+    <button onclick="buatApiKey()">Create API Key</button>
+    <button onclick="copyApiKey()">Copy</button>
+    <textarea id="apikey" readonly placeholder="Klik di sini untuk menyalin API Key..."></textarea>
+    <div id="notif">✅ API Key disalin!</div>
+  </div>
+
+  <script>
+    async function buatApiKey() {
+      const textArea = document.getElementById('apikey');
+      textArea.value = 'Sedang membuat API Key...';
+      try {
+        const response = await fetch('http://localhost:3000/create', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' } 
+        });
+
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+        const data = await response.json();
+        textArea.value = data.apiKey || 'Tidak ada API Key dikembalikan!';
+      } catch (error) {
+        textArea.value = '❌ Gagal membuat API Key!\n' + error.message;
+        console.error('Error:', error);
+      }
+    }
+
+    async function copyApiKey() {
+      const textArea = document.getElementById('apikey');
+      const notif = document.getElementById('notif');
+
+      if (!textArea.value || textArea.value.includes('Gagal') || textArea.value.includes('Sedang')) {
+        notif.textContent = '⚠️ Tidak ada API Key untuk disalin!';
+      } else {
+        await navigator.clipboard.writeText(textArea.value);
+        notif.textContent = '✅ API Key disalin!';
+      }
+
+      notif.classList.add('show');
+      setTimeout(() => notif.classList.remove('show'), 2000);
+    }
+
+    // 💡 Klik di dalam textarea otomatis copy
+    document.getElementById('apikey').addEventListener('click', copyApiKey);
+  </script>
+</body>
+</html>
